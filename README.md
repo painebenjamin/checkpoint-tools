@@ -11,6 +11,12 @@ A small collection of helpful command-line tools for working with PyTorch checkp
     <a href="https://pypistats.org/packages/checkpoint-tools"><img alt="PyPI - Downloads" src="https://img.shields.io/pypi/dd/checkpoint-tools?logo=python&logoColor=white&color=00519c"></a>
 </div>
 
+# Installation
+
+```sh
+pip install checkpoint-tools
+```
+
 # Available Commands
 
 ## `metadata`
