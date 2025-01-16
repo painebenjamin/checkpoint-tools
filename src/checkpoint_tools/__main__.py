@@ -127,8 +127,11 @@ def convert(
     replace_key: List[str]=[],
 ) -> None:
     """
-    Convert a PyTorch checkpoint to SafeTensors format,
+    Convert a PyTorch/SafeTensors checkpoint to SafeTensors format,
     optionally changing the precision of the (floating point) tensors.
+
+    Writes the file with a suffix appropriate for the precision of the
+    tensors in the state dictionary.
     """
     if name is None:
         name, _ = os.path.splitext(os.path.basename(input_file))
@@ -171,14 +174,23 @@ def convert_to_diffusers(
     replace_key: List[str]=[],
 ) -> None:
     """
-    Convert a non-diffusers PyTorch checkpoint to Diffusers format in SafeTensors.
+    Convert a non-diffusers PyTorch/SafeTensors checkpoint to Diffusers
+    format in SafeTensors.
+
+    Writes the file with a suffix appropriate for the precision of the
+    tensors in the state dictionary.
 
     Supported model types:
-        - Stable Diffusion 1.5
-        - Stable Diffusion XL
-        - Stable Diffusion 3.5
-        - FLUX.Dev
-        - FLUX.Schnell
+
+        Stable Diffusion 1.5
+
+        Stable Diffusion XL
+
+        Stable Diffusion 3.5
+
+        FLUX.Dev
+
+        FLUX.Schnell
     """
     if name is None:
         name, _ = os.path.splitext(os.path.basename(input_file))
@@ -236,7 +248,9 @@ def combine(
     replace_key: List[str]=[],
 ) -> None:
     """
-    Combine multiple checkpoints into a single checkpoint.
+    Combine multiple PyTorch/SafeTensors checkpoints into a single
+    SafeTensors checkpoint, optionally changing the precision of
+    the (floating point) tensors.
     """
     replace_keys = dict((key, value) for key, _, value in (key.partition(":") for key in replace_key))
     if name is None:
