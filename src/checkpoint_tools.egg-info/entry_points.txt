@@ -1,0 +1,3 @@
+[console_scripts]
+checkpoint-tools = checkpoint_tools.__main__:main
+
