@@ -19,6 +19,8 @@ pip install checkpoint-tools
 
 # Available Commands
 
+See all with `checkpoint-tools --help`
+
 ## `metadata`
 
 ```
