@@ -8,7 +8,7 @@ A small collection of helpful command-line tools for working with PyTorch checkp
     <img src="https://img.shields.io/github/forks/painebenjamin/checkpoint-tools?style=social" alt="forks - checkpoint-tools"><br />
     <a href="https://github.com/painebenjamin/checkpoint-tools/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-Apache-00519c" alt="License"></a>
     <a href="https://pypi.org/project/checkpoint-tools"><img alt="PyPI - Version" src="https://img.shields.io/pypi/v/checkpoint-tools?color=00519c"></a>
-    <a href="https://pypistats.org/packages/checkpoint-tools"><img alt="PyPI - Downloads" src="https://img.shields.io/pypi/dd/checkpoint-tools?logo=python&logoColor=white&color=00519c"></a>
+    <a href="https://pypistats.org/packages/checkpoint-tools"><img alt="PyPI - Downloads" src="https://img.shields.io/pypi/dm/checkpoint-tools?logo=python&logoColor=white&color=00519c"></a>
 </div>
 
 # Installation
