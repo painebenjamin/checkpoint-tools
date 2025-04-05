@@ -13,7 +13,7 @@ deps = [
 
 setup(
     name="checkpoint-tools",
-    version="0.1.0", # expected format is one of x.y.z.dev0, or x.y.z.rc1 or x.y.z (no to dashes, yes to dots)
+    version="0.2.0", # expected format is one of x.y.z.dev0, or x.y.z.rc1 or x.y.z (no to dashes, yes to dots)
     description="Useful tools for working with pytorch checkpoints and popular machine learning libraries.",
     long_description=open("README.md", "r", encoding="utf-8").read(),
     long_description_content_type="text/markdown",

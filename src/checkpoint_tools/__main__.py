@@ -9,6 +9,7 @@ from typing import Optional, List, Any, Callable
 from .util import (
     cyan,
     green,
+    load_metadata,
     load_state_dict,
     get_filtered_renamed_state_dict,
     convert_state_dict_dtype,
@@ -29,6 +30,14 @@ def precision_options(include_quantization: bool=False) -> Callable[..., Any]:
             default=True,
             is_flag=True,
             help="Leave all tensors as full precision"
+        )(fn)
+        fn = click.option(
+            "--float32",
+            "precision",
+            flag_value="float32",
+            default=False,
+            is_flag=True,
+            help="Convert all floating point tensors to float32"
         )(fn)
         fn = click.option(
             "--float16",
@@ -107,6 +116,8 @@ def checkpoint_options() -> Callable[..., Any]:
         fn = click.option("--overwrite/--no-overwrite", default=False, is_flag=True, help="Overwrite output file if it exists")(fn)
         fn = click.option("--ignore-key", type=str, multiple=True, help="Keys to ignore")(fn)
         fn = click.option("--replace-key", type=str, multiple=True, help="Keys to replace, use `:` to separate old and new key parts")(fn)
+        fn = click.option("--prefix", type=str, default=None, help="Prefix to add to keys")(fn)
+        fn = click.option("--unsafe", is_flag=True, help="Allow loading unsafe checkpoints.", default=False)(fn)
         return fn
     return wrap
 
@@ -125,6 +136,8 @@ def convert(
     overwrite: bool=False,
     ignore_key: List[str]=[],
     replace_key: List[str]=[],
+    prefix: Optional[str]=None,
+    unsafe: bool=False
 ) -> None:
     """
     Convert a PyTorch/SafeTensors checkpoint to SafeTensors format,
@@ -136,17 +149,24 @@ def convert(
     if name is None:
         name, _ = os.path.splitext(os.path.basename(input_file))
 
-    replace_keys=dict((key, value) for key, _, value in (key.partition(":") for key in replace_key))
+    replace_keys = dict(
+        (key, value)
+        for key, _, value in
+        (key.partition(":") for key in replace_key)
+    )
 
-    state_dict = load_state_dict(input_file)
+    metadata = load_metadata(input_file)
+    state_dict = load_state_dict(input_file, unsafe=unsafe)
     state_dict = get_filtered_renamed_state_dict(
         state_dict,
         ignore_keys=ignore_key,
-        replace_keys=replace_keys
+        replace_keys=replace_keys,
+        prefix=prefix
     )
     convert_state_dict_dtype(state_dict, precision)
     extension = get_extension_for_state_dict(state_dict)
     output_file = f"{name}{extension}"
+
     if os.path.exists(output_file):
         if overwrite:
             os.remove(output_file)
@@ -155,7 +175,7 @@ def convert(
             return
 
     click.echo(f"Writing {output_file}")
-    safetensors.torch.save_file(state_dict, output_file)
+    safetensors.torch.save_file(state_dict, output_file, metadata=metadata)
     click.echo("Done!")
 
 @main.command("convert-to-diffusers")
@@ -172,6 +192,8 @@ def convert_to_diffusers(
     overwrite: bool=False,
     ignore_key: List[str]=[],
     replace_key: List[str]=[],
+    prefix: Optional[str]=None,
+    unsafe: bool=False
 ) -> None:
     """
     Convert a non-diffusers PyTorch/SafeTensors checkpoint to Diffusers
@@ -200,18 +222,24 @@ def convert_to_diffusers(
     else:
         quantization = None
 
-    replace_keys=dict((key, value) for key, _, value in (key.partition(":") for key in replace_key))
+    replace_keys = dict(
+        (key, value)
+        for key, _, value in 
+        (key.partition(":") for key in replace_key)
+    )
 
     model_type, state_dicts = get_diffusers_state_dicts_from_checkpoint(
         input_file,
-        model_type=model_type
+        model_type=model_type,
+        unsafe=unsafe
     )
 
     for model_name, state_dict in state_dicts.items():
         state_dict = get_filtered_renamed_state_dict(
             state_dict,
             ignore_keys=ignore_key,
-            replace_keys=replace_keys
+            replace_keys=replace_keys,
+            prefix=prefix
         )
         convert_state_dict_dtype(state_dict, precision)
         if quantization is not None:
@@ -224,12 +252,14 @@ def convert_to_diffusers(
 
         extension = get_extension_for_state_dict(state_dict)
         output_file = f"{name}-{model_name}{extension}"
+
         if os.path.exists(output_file):
             if overwrite:
                 os.remove(output_file)
             else:
                 click.echo(f"Output file {output_file} already exists, use --overwrite to replace")
                 continue
+
         click.echo(f"Writing {output_file}")
         safetensors.torch.save_file(state_dict, output_file)
 
@@ -246,13 +276,20 @@ def combine(
     overwrite: bool=False,
     ignore_key: List[str]=[],
     replace_key: List[str]=[],
+    prefix: Optional[str]=None,
+    unsafe: bool=False
 ) -> None:
     """
     Combine multiple PyTorch/SafeTensors checkpoints into a single
     SafeTensors checkpoint, optionally changing the precision of
     the (floating point) tensors.
     """
-    replace_keys = dict((key, value) for key, _, value in (key.partition(":") for key in replace_key))
+    replace_keys = dict(
+        (key, value)
+        for key, _, value
+        in (key.partition(":") for key in replace_key)
+    )
+
     if name is None:
         name = "-".join([
             os.path.splitext(os.path.basename(input_file))[0]
@@ -260,14 +297,19 @@ def combine(
         ])
 
     combined_state_dict = {}
+    combined_metadata = {}
     for input_file in input_files:
-        state_dict = load_state_dict(input_file)
+        state_dict = load_state_dict(input_file, unsafe=unsafe)
         combined_state_dict.update(state_dict)
+
+        metadata = load_metadata(input_file)
+        combined_metadata.update(metadata)
 
     combined_state_dict = get_filtered_renamed_state_dict(
         combined_state_dict,
         ignore_keys=ignore_key,
-        replace_keys=replace_keys
+        replace_keys=replace_keys,
+        prefix=prefix
     )
     convert_state_dict_dtype(combined_state_dict, precision)
     extension = get_extension_for_state_dict(combined_state_dict)
@@ -280,7 +322,7 @@ def combine(
             return
 
     click.echo(f"Writing {output_file}")
-    safetensors.torch.save_file(combined_state_dict, output_file)
+    safetensors.torch.save_file(combined_state_dict, output_file, metadata=combined_metadata)
     click.echo("Done!")
 
 @main.command("metadata")
@@ -290,6 +332,8 @@ def metadata(input_file: str) -> None:
     Print metadata of a SafeTensors checkpoint.
     """
     state_dict = load_state_dict(input_file)
+    metadata = load_metadata(input_file)
+
     total_params = 0
     for key, value in state_dict.items():
         shape = ", ".join([str(s) for s in value.shape])
@@ -307,6 +351,13 @@ def metadata(input_file: str) -> None:
     abbreviated = "{{0:.{0}f}}{{1}}".format(precision).format(abbreviated_params, unit)
     click.echo()
     click.echo(f"Total parameters: {cyan(abbreviated)} ({total_params:,d})")
+
+    if metadata:
+        click.echo()
+        click.echo("Metadata:")
+
+        for key, metadatum in metadata.items():
+            click.echo(f"{cyan(key)}: {green(metadatum)}")
 
 if __name__ == "__main__":
     main()

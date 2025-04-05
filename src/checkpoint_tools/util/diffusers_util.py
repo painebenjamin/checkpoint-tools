@@ -14,6 +14,7 @@ from .state_dict_util import load_state_dict
 
 V1_CONFIG = "https://huggingface.co/stable-diffusion-v1-5/stable-diffusion-v1-5/raw/main/unet/config.json"
 XL_CONFIG = "https://huggingface.co/stabilityai/stable-diffusion-xl-base-1.0/raw/main/unet/config.json"
+V3_5_MEDIUM_CONFIG = "https://huggingface.co/stabilityai/stable-diffusion-3.5-medium/raw/main/transformer/config.json"
 V3_5_LARGE_CONFIG = "https://huggingface.co/stabilityai/stable-diffusion-3.5-large/raw/main/transformer/config.json"
 FLUX_DEV_CONFIG = "https://huggingface.co/black-forest-labs/FLUX.1-dev/raw/main/transformer/config.json"
 FLUX_SCHNELL_CONFIG = "https://huggingface.co/black-forest-labs/FLUX.1-schnell/raw/main/transformer/config.json"
@@ -30,6 +31,8 @@ def get_diffusers_config_url(model_type: str) -> str:
         config_url = FLUX_DEV_CONFIG
     elif model_type == "flux-schnell":
         config_url = FLUX_SCHNELL_CONFIG
+    elif model_type == "sd35_medium":
+        config_url = V3_5_MEDIUM_CONFIG
     elif model_type == "sd35_large":
         config_url = V3_5_LARGE_CONFIG
     else:
@@ -67,7 +70,7 @@ def quantize_state_dict_for_model(
     except ImportError:
         raise ImportError("BitsAndBytes is not installed. Run `pip install bitsandbytes` to use quantization.")
     try:
-        if model_type not in ["flux-schnell", "flux-dev", "sd35_large"]:
+        if model_type not in ["flux-schnell", "flux-dev", "sd35_large", "sd35_medium"]:
             raise ValueError(f"Unsupported model type for quantization: {model_type}")
         if model_name not in ["transformer"]:
             raise ValueError(f"Unsupported model for quantization: {model_type}.{model_name}")
@@ -75,7 +78,7 @@ def quantize_state_dict_for_model(
         from diffusers.quantizers.quantization_config import BitsAndBytesConfig
         if model_type == "flux-dev" or model_type == "flux-schnell":
             from diffusers.models.transformers.transformer_flux import FluxTransformer2DModel as TransformerModel
-        elif model_type == "sd35_large":
+        elif model_type in ["sd35_large", "sd35_medium"]:
             from diffusers.models.transformers.transformer_sd3 import SD3Transformer2DModel as TransformerModel
     except ImportError:
         raise ImportError("Diffusers is not installed or needs to be updated. Run `pip install -U diffusers`")
@@ -113,6 +116,7 @@ def quantize_state_dict_for_model(
 def get_diffusers_state_dicts_from_checkpoint(
     input_file: str,
     model_type: Optional[str]=None,
+    unsafe: bool=False,
 ) -> Tuple[str, Dict[str, Dict[str, torch.Tensor]]]:
     """
     Converts a supported diffusion model to a SafeTensors file.
@@ -129,7 +133,7 @@ def get_diffusers_state_dicts_from_checkpoint(
     except ImportError:
         raise ImportError("Diffusers is not installed. Run `pip install -U diffusers`")
 
-    state_dict = load_state_dict(input_file)
+    state_dict = load_state_dict(input_file, unsafe=unsafe)
     if model_type is None:
         model_type = infer_diffusers_model_type(state_dict) # type: ignore[no-untyped-call]
 
@@ -137,7 +141,7 @@ def get_diffusers_state_dicts_from_checkpoint(
     has_xl_text_encoder = any(key.startswith("conditioner.embedders.0.transformer") for key in state_dict.keys())
     has_xl_text_encoder_2 = any(key.startswith("conditioner.embedders.1.model") for key in state_dict.keys())
 
-    if model_type not in ["v1", "xl_base", "flux-dev", "flux-schnell", "sd35_large"]:
+    if model_type not in ["v1", "xl_base", "flux-dev", "flux-schnell", "sd35_large", "sd35_medium"]:
         raise ValueError(f"Unsupported model type: {model_type}")
 
     state_dicts = {}
@@ -145,7 +149,7 @@ def get_diffusers_state_dicts_from_checkpoint(
     if model_type in ["flux-dev", "flux-schnell"]:
         logger.info(f"Converting {model_type} transformer")
         state_dicts["transformer"] = convert_flux_transformer_checkpoint_to_diffusers(state_dict) # type: ignore[no-untyped-call]
-    elif model_type == "sd35_large":
+    elif model_type in ["sd35_large", "sd35_medium"]:
         logger.info(f"Converting {model_type} transformer")
         state_dicts["transformer"] = convert_sd3_transformer_checkpoint_to_diffusers(state_dict) # type: ignore[no-untyped-call]
     else:

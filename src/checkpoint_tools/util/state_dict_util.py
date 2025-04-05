@@ -7,6 +7,7 @@ from .log_util import logger
 from .dtype_util import get_torch_dtype
 
 __all__ = [
+    "load_metadata",
     "load_state_dict",
     "get_state_dict_dtype",
     "get_filtered_renamed_state_dict",
@@ -45,17 +46,24 @@ def flatten_state_dict(
     """
     return dict(flattened_state_dict(state_dict))
 
-def load_state_dict(input_file: str) -> Dict[str, torch.Tensor]:
+def load_state_dict(
+    input_file: str,
+    unsafe: bool=False
+) -> Dict[str, torch.Tensor]:
     """
     Loads a state dictionary from a file
     """
     if input_file.endswith(".safetensors"):
         state_dict = {}
-        with safetensors.safe_open(input_file, framework="pt") as f: # type: ignore[attr-defined,no-untyped-call]
+        with safetensors.safe_open(input_file, framework="pt") as f: # type: ignore[no-untyped-call]
             for key in f.keys():
                 state_dict[key] = f.get_tensor(key)
     else:
-        state_dict = torch.load(input_file, map_location="cpu")
+        state_dict = torch.load(
+            input_file,
+            map_location="cpu",
+            weights_only=not unsafe
+        )
         state_dict = flatten_state_dict(state_dict)
     return state_dict
 
@@ -118,7 +126,8 @@ def get_state_dict_dtype(
 def get_filtered_renamed_state_dict(
     state_dict: Dict[str, torch.Tensor],
     ignore_keys: List[str]=[],
-    replace_keys: Dict[str, str]={}
+    replace_keys: Dict[str, str]={},
+    prefix: Optional[str]=None
 ) -> Dict[str, torch.Tensor]:
     """
     Filters the state dict by ignoring and renaming keys.
@@ -131,6 +140,11 @@ def get_filtered_renamed_state_dict(
         for old, new in replace_keys.items():
             if old in key:
                 key = key.replace(old, new)
+        if prefix is not None:
+            if prefix.endswith("."):
+                key = f"{prefix}{key}"
+            else:
+                key = f"{prefix}.{key}"
         if key in filtered_state_dict:
             raise ValueError(f"Key {key} already exists in the state dict.")
         filtered_state_dict[key] = value
@@ -191,3 +205,21 @@ def get_extension_for_state_dict(
         quant_ext = f".{quantization}"
 
     return f"{precision_ext}{quant_ext}.safetensors"
+
+def load_metadata(input_file: str) -> Dict[str, str]:
+    """
+    Loads the metadata from a safetensors file.
+
+    :param input_file: The path to the safetensors file.
+    :return: The metadata as a dictionary.
+    """
+    if not input_file.endswith(".safetensors"):
+        return {}
+
+    with safetensors.safe_open(input_file, framework="pt") as f: # type: ignore[no-untyped-call]
+        metadata = f.metadata()
+
+    if not isinstance(metadata, dict):
+        return {}
+
+    return metadata
